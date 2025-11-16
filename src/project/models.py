@@ -15,12 +15,19 @@ class BaseSlot(CSVParsable):
     start_time: float = field(init=False)
     end_time: float = field(init=False)
     current_cap: int = field(default=0, init=False)
+    current_alt_cap: int = field(default=0, init=False)
 
     def increment_current_cap(self):
         self.current_cap += 1
 
     def decrement_current_cap(self):
         self.current_cap -= 1
+
+    def increment_current_alt_cap(self):
+        self.current_alt_cap += 1
+
+    def decrement_current_alt_cap(self):
+        self.current_alt_cap -= 1
 
     def __post_init__(self) -> None:
         time_split = self.time.split(":")
