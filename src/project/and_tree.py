@@ -4,12 +4,9 @@ from typing import Dict, List, Optional, Sequence, Union
 from project.models import LecTut, Lecture, LectureSlot, TutorialSlot, LecTutSlot, is_tut, is_lec
 from project.parser import InputData
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ScheduledItem:
     lt: LecTut
-    start_time: float
-    end_time: float
-    day: str
     slot: LecTutSlot
     cap_at_assign: int
 
@@ -18,28 +15,18 @@ class DummyLecTut(LecTut):
     identifier: str = "Dummy"
     alrequired: bool = False
 
-    @classmethod
-    def make(cls) -> DummyLecTut:
-        return cls()
-
 @dataclass(frozen=True)
 class DummyScheduledItem(ScheduledItem):
-    lt: LecTut = field(default_factory=DummyLecTut.make)
+    lt: LecTut = field(default_factory=DummyLecTut)
     start_time: float = 0.0
     end_time: float = 0.0
     day: str = ""
     slot: Optional[LecTutSlot] = None
     cap_at_assign: int = 0
-    is_dummy: bool = True
 
-    @classmethod
-    def make(cls) -> DummyScheduledItem:
-        return cls()
-
-@dataclass
+@dataclass(frozen=True, slots=True)
 class Node:
-    schedule: Dict[str, ScheduledItem]
-    most_recent_item: ScheduledItem = field(default_factory=DummyScheduledItem.make)
+    most_recent_item: ScheduledItem = field(default_factory=DummyScheduledItem)
 
 
 def _overlap(start1: float, end1: float, start2: float, end2: float) -> bool:
@@ -58,20 +45,24 @@ class AndTreeSearch:
 
         self._successors: Dict[str, LecTut] = {}
 
+        self._curr_schedule: Dict[str, ScheduledItem] = {}
+
         self._results = []
 
+        self.num_leafs = 0 # for observability
+
     
-    def _pass_hc(self, curr_sched: Dict[str, ScheduledItem], next_item: ScheduledItem) -> bool:
+    def _fail_hc(self, curr_sched: Dict[str, ScheduledItem], next_lt: LecTut, next_day: str, next_start: float, next_end: float) -> bool:
         # Handle tutorial and lecture TIME OVERLAPS
-        if is_tut(next_item.lt) and next_item.lt.parent_lecture_id in curr_sched:
-            sched_lecture = curr_sched[next_item.lt.parent_lecture_id]
-            if _overlap(sched_lecture.start_time, sched_lecture.end_time, next_item.start_time, next_item.end_time):
-                return False
+        if is_tut(next_lt) and next_lt.parent_lecture_id in curr_sched:
+            sched_lecture = curr_sched[next_lt.parent_lecture_id]
+            if _overlap(sched_lecture.slot.start_time, sched_lecture.slot.end_time, next_start, next_end):
+                return True
 
         # Handle not compatible TIME OVERLAPS
         for non_c in self._input_data.not_compatible:
             id1, id2 = non_c.id1, non_c.id2
-            if next_item.lt.identifier not in (id1, id2):
+            if next_lt.identifier not in (id1, id2):
                 continue
             if id1 in curr_sched:
                 sched_item = curr_sched[id1]
@@ -79,17 +70,17 @@ class AndTreeSearch:
                 sched_item = curr_sched[id2]
             else:
                 continue
-            if _overlap(sched_item.start_time, sched_item.end_time, next_item.start_time, next_item.end_time):
-                return False
+            if _overlap(sched_item.slot.start_time, sched_item.slot.end_time, next_start, next_end):
+                return True
 
         # Handle unwanted SLOT ASSIGNMENTS
 
-        if (ident := next_item.lt.identifier) in self._input_data.unwanted:
+        if (ident := next_lt.identifier) in self._input_data.unwanted:
             for uw in self._input_data.unwanted[ident]:
-                if next_item.day == uw.day and next_item.start_time == uw.start_time:
-                    return False
+                if next_day == uw.day and next_start == uw.start_time:
+                    return True
         
-        return True
+        return False
     
 
     def _get_expansions(self, leaf: Node) -> List[ScheduledItem]:
@@ -106,23 +97,22 @@ class AndTreeSearch:
                 return []
             self._successors[leaf.most_recent_item.lt.identifier] = next_lectut
         
-        if isinstance(next_lectut, Lecture):
+        if is_lec(next_lectut):
             open_slots = self._open_lecture_slots
         else:
             open_slots = self._open_tut_slots
         
         expansions = []
         for _, os in open_slots.items():
-            new_item = ScheduledItem(next_lectut, os.start_time, os.end_time, os.day, os, os.current_cap)
-            if not self._pass_hc(leaf.schedule, new_item):
+            if self._fail_hc(self._curr_schedule, next_lectut, os.day, os.start_time, os.end_time):
                 continue
-            expansions.append(new_item)
+            expansions.append(ScheduledItem(next_lectut, os, os.current_cap))
         return expansions
 
     def _pre_process(self) -> Node:
-        return Node ({}, DummyScheduledItem.make())
+        return Node (DummyScheduledItem())
     
-    def _pre_dfs_pop(self, slot: LecTutSlot) -> None:
+    def _pre_dfs_slot_update(self, slot: LecTutSlot) -> None:
 
         """
         NEED TO HANDLE ACTIVE LEARNING
@@ -135,7 +125,7 @@ class AndTreeSearch:
             else:
                 del self._open_tut_slots[slot.identifier]
     
-    def _post_dfs_updates(self, slot: LecTutSlot) -> None:
+    def _post_dfs_slot_update(self, slot: LecTutSlot) -> None:
         """
         NEED TO HANDLE ACTIVE LEARNING
         """
@@ -146,27 +136,29 @@ class AndTreeSearch:
             else:
                 self._open_tut_slots[slot.identifier] = slot
 
+    def _pre_dfs_updates(self, scheduled_item: ScheduledItem):
+        self._pre_dfs_slot_update(scheduled_item.slot)
+        self._curr_schedule[scheduled_item.lt.identifier] = scheduled_item
+
+    def _post_dfs_updates(self, scheduled_item: ScheduledItem):
+        self._post_dfs_slot_update(scheduled_item.slot)
+        del self._curr_schedule[scheduled_item.lt.identifier]
 
     def _dfs(self, current_leaf: Node):
 
         expansions = self._get_expansions(current_leaf)
 
         if not expansions:
-            # print(len(current_leaf.schedule))
-            # print(current_leaf)
-            # print(self._unassigned_lecs)
-            # print(self._unassigned_tuts)
-            # print(self._open_lecture_slots)
-            # print(self._open_tut_slots)
-            # print(" ")
-            self._results.append(current_leaf)
+            self.num_leafs += 1
+            if len(self._curr_schedule) == len(self._input_data.lectures) + len(self._input_data.tutorials):
+                self._results.append(self._curr_schedule.copy())
             return
 
         for next_item in expansions:
-            new_leaf = Node(most_recent_item=next_item, schedule=current_leaf.schedule | {next_item.lt.identifier: next_item})
-            self._pre_dfs_pop(next_item.slot)
+            new_leaf = Node(most_recent_item=next_item)
+            self._pre_dfs_updates(next_item)
             self._dfs(new_leaf)
-            self._post_dfs_updates(next_item.slot)
+            self._post_dfs_updates(next_item)
 
 
     def search(self) -> List:

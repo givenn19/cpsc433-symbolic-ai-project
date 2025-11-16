@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import TypeGuard, Union
 from project.csv_parsable import CSVParsable
 
-@dataclass
+@dataclass(slots=True)
 class BaseSlot(CSVParsable):
     day: str
     time: str
@@ -40,20 +40,15 @@ class BaseSlot(CSVParsable):
 
         self.start_time = start_time
         self.end_time = end_time
-        # identifier_suffix is set by subclasses before calling super().__post_init__()
         self.identifier = f"{self.day}{self.time}{self.identifier_suffix}"
-        # current_cap already has a default; keep as-is
 
-
-@dataclass
+@dataclass(slots=True)
 class LectureSlot(BaseSlot):
-    # keeps the same positional signature as the previous LectureSlot:
-    # LectureSlot(day, time, lecturemax, lecturemin, allecturemax)
+
     def __post_init__(self) -> None:
         self.identifier_suffix = "LEC"
-        super().__post_init__()
+        BaseSlot.__post_init__(self)
 
-    # backwards-compatible property names
     @property
     def lecturemax(self) -> int:
         return self.max_cap
@@ -79,13 +74,12 @@ class LectureSlot(BaseSlot):
         self.alt_max = v
 
 
-@dataclass
+@dataclass(slots=True)
 class TutorialSlot(BaseSlot):
     def __post_init__(self) -> None:
         self.identifier_suffix = "TUT"
-        super().__post_init__()
+        BaseSlot.__post_init__(self)
 
-    # backwards-compatible property names
     @property
     def tutorialmax(self) -> int:
         return self.max_cap
@@ -110,16 +104,16 @@ class TutorialSlot(BaseSlot):
     def altutorialmax(self, v: int) -> None:
         self.alt_max = v
 
-@dataclass
-class LecTut(CSVParsable, ABC):
+@dataclass(slots=True)
+class LecTut(CSVParsable):
     identifier: str
     alrequired: bool
 
-@dataclass
+@dataclass(slots=True)
 class Lecture(LecTut):
     pass
 
-@dataclass
+@dataclass(slots=True)
 class Tutorial(LecTut):
     parent_lecture_id: str = field(default="", init=False)
     def __post_init__(self) -> None:
@@ -131,16 +125,18 @@ class Tutorial(LecTut):
 
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class NotCompatible(CSVParsable):
     id1: str
     id2: str
 
-@dataclass
+@dataclass(slots=True)
 class Unwanted(CSVParsable):
     identifier: str
     day: str
     time: str
+    start_time: float = field(init=False)
+    end_time: float = field(init=False)
 
     def __post_init__(self) -> None:
         time_split = self.time.split(":")
@@ -162,7 +158,7 @@ class Unwanted(CSVParsable):
         self.end_time = end_time
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Preference(CSVParsable):
     day: str
     time: str
@@ -170,13 +166,13 @@ class Preference(CSVParsable):
     pref_val: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Pair(CSVParsable):
     id1: str
     id2: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class PartialAssignment(CSVParsable):
     identifier: str
     day: str

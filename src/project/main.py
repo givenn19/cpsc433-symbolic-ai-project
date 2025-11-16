@@ -25,8 +25,8 @@ def main():
 
     print(f"speed: {end - start}")
 
-    print("num leafs:", len(res))
-    print("num valid solutions:", len([r for r in res if len(r.schedule) == len(input_data.lectures) + len(input_data.tutorials)]))
+    print("num leafs:", search.num_leafs)
+    print("num valid solutions:", len([r for r in res if len(r) == len(input_data.lectures) + len(input_data.tutorials)]))
 
     # for r in res:
     #     print(len(r.schedule))

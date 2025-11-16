@@ -3,8 +3,9 @@ from typing import NamedTuple, get_type_hints, Type, TypeVar
 
 T = TypeVar("T", bound="CSVParsable")
 
+
 class CSVParsable:
-    
+
     @classmethod
     def from_csv(cls: Type[T], line: str) -> T:
         parts = [p.strip() for p in line.split(",")]

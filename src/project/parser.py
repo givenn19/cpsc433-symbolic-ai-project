@@ -57,25 +57,24 @@ def _parse_file(path):
     parsed = ParsedFile()
 
     with open(path) as f:
-        current_header = None
         current_attr = None
         current_cls = None
 
         for raw in f:
             line = raw.strip()
-            if not line:      # skip unlimited blank lines
+            if not line:
                 continue
             line = line.replace("LAB", "TUT")
             logger.info(line)
-            # --- If this is a header ---
+
             if line in headers:
                 header_name = line
 
                 current_attr, current_cls = headers[header_name]
-                current_header = header_name
                 continue
             
-            # Parse the line with your existing code
+            assert current_cls
+            assert current_attr
             entry = current_cls.from_csv(line)
             getattr(parsed, current_attr).append(entry)
 
@@ -88,7 +87,6 @@ def get_input_data(path: str) -> InputData:
     """Get all the inputted data and raise exceptions on invalid inputs"""
     parsed_file = _parse_file(path)
 
-    # build identifier -> Lecture|Tutorial lookup
     id_map: Dict[str, LecTut] = {}
     for lec in parsed_file.lectures:
         id_map[lec.identifier] = lec
@@ -98,7 +96,6 @@ def get_input_data(path: str) -> InputData:
         print(tut.identifier, tut)
 
 
-    # convert list forms into the dict structures expected by InputData
 
     pair: Dict[LecTut, LecTut] = {}
 

@@ -34,3 +34,12 @@ NO LEC/TUT AND NO NON COMPATIBLE OVERLAP AND NO UNWANTED TIMES:
     /home/nisha/workspace/school/cpsc433/project/src/project/and_tree.py:162: size=128 B, count=1, average=128 B
     /home/nisha/workspace/school/cpsc433/project/src/project/main.py:17: size=24 B, count=1, average=24 B
     speed: 0.0005447010044008493
+
+IMPROVED MEMORY + CORRECTNESS
+    speed: 0.00021632399875670671
+    num leafs: 9
+    num valid solutions: 0
+
+    Top 20 memory allocations:
+    /home/nisha/workspace/school/cpsc433/project/src/project/and_tree.py:141: size=208 B, count=1, average=208 B
+    /home/nisha/workspace/school/cpsc433/project/src/project/and_tree.py:135: size=208 B, count=1, average=208 B
