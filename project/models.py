@@ -59,60 +59,11 @@ class LectureSlot(BaseSlot):
         self.identifier_suffix = "LEC"
         BaseSlot.__post_init__(self)
 
-    @property
-    def lecturemax(self) -> int:
-        return self.max_cap
-
-    @lecturemax.setter
-    def lecturemax(self, v: int) -> None:
-        self.max_cap = v
-
-    @property
-    def lecturemin(self) -> int:
-        return self.min_cap
-
-    @lecturemin.setter
-    def lecturemin(self, v: int) -> None:
-        self.min_cap = v
-
-    @property
-    def allecturemax(self) -> int:
-        return self.alt_max
-
-    @allecturemax.setter
-    def allecturemax(self, v: int) -> None:
-        self.alt_max = v
-
-
 @dataclass(slots=True)
 class TutorialSlot(BaseSlot):
     def __post_init__(self) -> None:
         self.identifier_suffix = "TUT"
         BaseSlot.__post_init__(self)
-
-    @property
-    def tutorialmax(self) -> int:
-        return self.max_cap
-
-    @tutorialmax.setter
-    def tutorialmax(self, v: int) -> None:
-        self.max_cap = v
-
-    @property
-    def tutorialmin(self) -> int:
-        return self.min_cap
-
-    @tutorialmin.setter
-    def tutorialmin(self, v: int) -> None:
-        self.min_cap = v
-
-    @property
-    def altutorialmax(self) -> int:
-        return self.alt_max
-
-    @altutorialmax.setter
-    def altutorialmax(self, v: int) -> None:
-        self.alt_max = v
 
 @dataclass(slots=True)
 class LecTut(CSVParsable):

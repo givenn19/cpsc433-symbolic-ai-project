@@ -167,16 +167,17 @@ class AndTreeSearch:
     def _pre_dfs_slot_update(self, sched_item: ScheduledItem) -> None:
         slot = sched_item.slot
 
-        slot.increment_current_cap()
+        slot.current_cap += 1
 
         if sched_item.lt.alrequired:
-            slot.increment_current_alt_cap()
+            slot.current_alt_cap += 1
     
     def _post_dfs_slot_update(self, sched_item: ScheduledItem) -> None:
         slot = sched_item.slot
-        slot.decrement_current_cap()
+        slot.current_cap -= 1
+        
         if sched_item.lt.alrequired:
-            slot.decrement_current_alt_cap()
+            slot.current_alt_cap -= 1
 
     def _pre_dfs_updates(self, scheduled_item: ScheduledItem):
         self._pre_dfs_slot_update(scheduled_item)
