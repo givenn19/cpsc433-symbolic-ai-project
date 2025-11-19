@@ -1,5 +1,6 @@
 from collections import defaultdict, namedtuple
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Dict, List, NamedTuple
 import logging
 
@@ -58,7 +59,7 @@ headers = {
     "Partial assignments:": ("part_assign", PartialAssignment),
 }
 
-def _parse_file(path):
+def _parse_file(path: str | Path):
     parsed = ParsedFile()
 
     with open(path) as f:
@@ -88,17 +89,25 @@ def _parse_file(path):
 
 
 
-def get_input_data(path: str, w_min_filled: str, w_pref: str, w_pair: str, w_sec_diff: str, pen_lec_min: str, pen_tut_min: str, pen_not_paired: str, pen_section: str) -> InputData:
+def get_input_data(path: str | Path, w_min_filled: str, w_pref: str, w_pair: str, w_sec_diff: str, pen_lec_min: str, pen_tut_min: str, pen_not_paired: str, pen_section: str) -> InputData:
     """Get all the inputted data and raise exceptions on invalid inputs"""
     parsed_file = _parse_file(path)
 
     id_map: Dict[str, LecTut] = {}
-    for lec in parsed_file.lectures:
-        id_map[lec.identifier] = lec
-        print(lec.identifier, lec)
-    for tut in parsed_file.tutorials:
-        id_map[tut.identifier] = tut
-        print(tut.identifier, tut)
+    # for lec in parsed_file.lectures:
+    #     id_map[lec.identifier] = lec
+    #     print(lec.identifier, lec)
+    # for tut in parsed_file.tutorials:
+    #     id_map[tut.identifier] = tut
+    #     print(tut.identifier, tut)
+
+    for slot in parsed_file.lec_slots:
+        print(slot)
+
+    print(" ")
+
+    for lt in parsed_file.lectures:
+        print(lt)
 
 
 

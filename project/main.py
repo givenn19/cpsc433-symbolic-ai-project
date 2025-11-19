@@ -14,7 +14,7 @@ def main():
 
     tracemalloc.start()
     start = perf_counter()
-    res = search.search()
+    res, ans = search.search()
     end = perf_counter()
     snapshot = tracemalloc.take_snapshot()
     tracemalloc.stop()
@@ -32,6 +32,9 @@ def main():
     # for r in res:
     #     print(len(r.schedule))
     #     print(" ")
+
+    print(" ")
+    print(ans)
 
 if __name__ == "__main__":
     main()

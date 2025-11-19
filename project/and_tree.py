@@ -56,6 +56,8 @@ class AndTreeSearch:
         self._results = []
 
         self.num_leafs = 0 # for observability
+
+        self.ans: Optional[Dict[str, ScheduledItem]] = None
     
     def _calc_bounding_score_contrib(self, next_lt: LecTut, next_slot: LecTutSlot) -> float:
         # Preference penalty
@@ -194,7 +196,9 @@ class AndTreeSearch:
             self.num_leafs += 1 # for observability
             if len(self._curr_schedule) == len(self._input_data.lectures) + len(self._input_data.tutorials):
                 self._results.append(self._curr_schedule.copy())
-                self._min_eval = min(self._min_eval, self._get_eval_score())
+                if (ev := self._get_eval_score()) < self._min_eval:
+                    self.ans = self._curr_schedule.copy()
+                    self._min_eval = ev
             return
 
         for next_item in expansions:
@@ -203,12 +207,20 @@ class AndTreeSearch:
             self._dfs(new_leaf)
             self._post_dfs_updates(next_item)
 
+    def get_formatted_answer(self) -> List[str]:
+        assert self.ans
+        res = []
+        for _, node in self.ans.items():
+            res.append(f"{node.lt.identifier}, {node.slot.day}, {node.slot.time}")
 
-    def search(self) -> List:
+        return sorted(res)
+
+
+    def search(self):
 
         s_0 = self._pre_process()
         self._dfs(s_0)
 
 
-        return self._results
+        return self._results, self.ans
 
