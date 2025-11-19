@@ -3,6 +3,25 @@ from dataclasses import dataclass, field
 from typing import TypeGuard, Union
 from project.csv_parsable import CSVParsable
 
+
+def _calc_start_end_times(time_str: str, day: str, identifier: str):
+    time_split = time_str.split(":")
+    hour = int(time_split[0])
+    minute = 0 if time_split[1] == "00" else 0.5
+    start_time = hour + minute
+
+    if day == "MO":
+        end_time = start_time + 1
+    elif day == "TU":
+        if "TUT" in identifier:
+            end_time = start_time + 1
+        else:
+            end_time = start_time + 1.5
+    else:
+        end_time = start_time + 2
+
+    return start_time, end_time
+
 @dataclass(slots=True)
 class BaseSlot(CSVParsable):
     day: str
@@ -30,23 +49,7 @@ class BaseSlot(CSVParsable):
         self.current_alt_cap -= 1
 
     def __post_init__(self) -> None:
-        time_split = self.time.split(":")
-        hour = int(time_split[0])
-        minute = 0 if time_split[1] == "00" else 0.5
-        start_time = hour + minute
-
-        if self.day == "MO":
-            end_time = start_time + 1
-        elif self.day == "TU":
-            if self.identifier_suffix == "LEC":
-                end_time = start_time + 1.5
-            else:
-                end_time = start_time + 1
-        else:
-            end_time = start_time + 2
-
-        self.start_time = start_time
-        self.end_time = end_time
+        self.start_time, self.end_time, =_calc_start_end_times(self.time, self.day, self.identifier_suffix)
         self.identifier = f"{self.day}{self.time}{self.identifier_suffix}"
 
 @dataclass(slots=True)
@@ -118,7 +121,10 @@ class LecTut(CSVParsable):
 
 @dataclass(slots=True)
 class Lecture(LecTut):
-    pass
+    lecture_id: str = field(default="", init=False)
+    def __post_init__(self) -> None:
+        id_split = self.identifier.split(" ")
+        self.lecture_id = " ".join(id_split[:2])
 
 @dataclass(slots=True)
 class Tutorial(LecTut):
@@ -146,31 +152,20 @@ class Unwanted(CSVParsable):
     end_time: float = field(init=False)
 
     def __post_init__(self) -> None:
-        time_split = self.time.split(":")
-        hour = int(time_split[0])
-        minute = 0 if time_split[1] == "00" else 0.5
-        start_time = hour + minute
-
-        if self.day == "MO":
-            end_time = start_time + 1
-        elif self.day == "TU":
-            if "TUT" in self.identifier:
-                end_time = start_time + 1
-            else:
-                end_time = start_time + 1.5
-        else:
-            end_time = start_time + 2
-
-        self.start_time = start_time
-        self.end_time = end_time
+        self.start_time, self.end_time, =_calc_start_end_times(self.time, self.day, self.identifier)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class Preference(CSVParsable):
     day: str
     time: str
     identifier: str
-    pref_val: str
+    pref_val: int
+    start_time: float = field(init=False)
+    end_time: float = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.start_time, self.end_time, =_calc_start_end_times(self.time, self.day, self.identifier)
 
 
 @dataclass(frozen=True, slots=True)

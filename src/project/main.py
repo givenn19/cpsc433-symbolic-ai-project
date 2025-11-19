@@ -1,10 +1,11 @@
+import sys
 from time import perf_counter
 from project.parser import get_input_data
 from project.and_tree import AndTreeSearch
 import tracemalloc
 
 def main():
-    input_data = get_input_data("../input.txt")
+    input_data = get_input_data(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6], sys.argv[7], sys.argv[8], sys.argv[9])
 
     # for slot in input_data.lec_slots:
     #     slot.current_cap += 1

@@ -23,9 +23,14 @@ class InputData:
     lectures: List[Lecture]
     not_compatible: List[NotCompatible]
     unwanted: Dict[str, List[Unwanted]]
-    preferences: Dict[LecTut, DayTimePref]
-    pair: Dict[LecTut, LecTut]
+    preferences: Dict[str, Preference]
+    pair: Dict[str, str]
     part_assign: Dict[LecTut, DayTime]
+    w_min_filled: str
+    pen_lec_min: int
+    pen_tut_min: int
+    pen_not_paired: int
+    pen_section: int
 
 @dataclass
 class ParsedFile:
@@ -83,7 +88,7 @@ def _parse_file(path):
 
 
 
-def get_input_data(path: str) -> InputData:
+def get_input_data(path: str, w_min_filled: str, w_pref: str, w_pair: str, w_sec_diff: str, pen_lec_min: str, pen_tut_min: str, pen_not_paired: str, pen_section: str) -> InputData:
     """Get all the inputted data and raise exceptions on invalid inputs"""
     parsed_file = _parse_file(path)
 
@@ -97,14 +102,21 @@ def get_input_data(path: str) -> InputData:
 
 
 
-    pair: Dict[LecTut, LecTut] = {}
+    pair: Dict[str, str] = {}
+    for pr in parsed_file.pair:
+        pair[pr.id1] = pr.id2
+        pair[pr.id2] = pr.id1
 
     unwanted: Dict[str, List[Unwanted]] = defaultdict(list)
 
     for uw in parsed_file.unwanted:
         unwanted[uw.identifier].append(uw)
 
-    preferences: Dict[LecTut, DayTimePref] = {}
+    preferences: Dict[str, Preference] = {}
+
+    for pref in parsed_file.preferences:
+        pref.pref_val *= int(w_pref)
+        preferences[pref.identifier] = pref
 
     part_assign: Dict[LecTut, DayTime] = {}
 
@@ -119,4 +131,9 @@ def get_input_data(path: str) -> InputData:
         preferences=preferences,
         pair=pair,
         part_assign=part_assign,
+        w_min_filled=w_min_filled,
+        pen_lec_min=int(pen_lec_min),
+        pen_not_paired=int(pen_not_paired)*int(w_pair),
+        pen_tut_min=int(pen_tut_min),
+        pen_section=int(pen_section)*int(w_sec_diff)
     )

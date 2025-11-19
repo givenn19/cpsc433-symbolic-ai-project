@@ -9,6 +9,7 @@ class ScheduledItem:
     lt: LecTut
     slot: LecTutSlot
     cap_at_assign: int
+    b_score_contribution: float
 
 @dataclass
 class DummyLecTut(LecTut):
@@ -23,6 +24,7 @@ class DummyScheduledItem(ScheduledItem):
     day: str = ""
     slot: Optional[LecTutSlot] = None
     cap_at_assign: int = 0
+    b_score_contribution: float = 0
 
 @dataclass(frozen=True, slots=True)
 class Node:
@@ -47,10 +49,46 @@ class AndTreeSearch:
 
         self._curr_schedule: Dict[str, ScheduledItem] = {}
 
+        self._curr_bounding_score = 0
+
+        self._min_eval = float('inf')
+
         self._results = []
 
         self.num_leafs = 0 # for observability
+    
+    def _calc_bounding_score_contrib(self, next_lt: LecTut, next_slot: LecTutSlot) -> float:
+        # Preference penalty
+        pref_pen = 0
+        
+        if (ident := next_lt.identifier) in self._input_data.preferences and (self._input_data.preferences[ident].day != next_slot.day or self._input_data.preferences[ident].start_time != next_slot.start_time):
+            pref_pen = self._input_data.preferences[ident].pref_val
+    
+        # Pair penality
+        pair_pen = 0
+        if (ident := next_lt.identifier) in self._input_data.pair and (pair_id := self._input_data.pair[ident]) in self._curr_schedule and (self._curr_schedule[pair_id].slot.day != next_slot.day or self._curr_schedule[pair_id].slot.start_time != next_slot.start_time):
+            pair_pen = self._input_data.pen_not_paired
+        
+        # Section penalty
 
+        section_pen = 0
+        if not is_lec(next_lt):
+            return pref_pen + pair_pen
+
+        for _, item in self._curr_schedule.items():
+            if not is_lec(item.lt):
+                continue
+            if next_lt.lecture_id == item.lt.lecture_id and next_slot.day == item.slot.day and next_slot.start_time == item.slot.start_time:
+                section_pen = self._input_data.pen_section
+
+        b_score = pref_pen + pair_pen + section_pen
+        return b_score
+    
+    def _get_eval_score(self):
+        """
+        KEEP TRACK OF CURRENT EVAL SCORE FOR SPEED INSTEAD
+        """
+        return self._curr_bounding_score
     
     def _fail_hc(self, curr_sched: Dict[str, ScheduledItem], next_lt: LecTut, next_slot: LecTutSlot) -> bool:
 
@@ -115,7 +153,10 @@ class AndTreeSearch:
         for _, os in open_slots.items():
             if self._fail_hc(self._curr_schedule, next_lectut, os):
                 continue
-            expansions.append(ScheduledItem(next_lectut, os, os.current_cap))
+            next_b_score = self._calc_bounding_score_contrib(next_lectut, os)
+            if next_b_score + self._curr_bounding_score > self._min_eval:
+                continue
+            expansions.append(ScheduledItem(next_lectut, os, os.current_cap, next_b_score))
         return expansions
 
     def _pre_process(self) -> Node:
@@ -138,19 +179,22 @@ class AndTreeSearch:
     def _pre_dfs_updates(self, scheduled_item: ScheduledItem):
         self._pre_dfs_slot_update(scheduled_item)
         self._curr_schedule[scheduled_item.lt.identifier] = scheduled_item
+        self._curr_bounding_score += scheduled_item.b_score_contribution
 
     def _post_dfs_updates(self, scheduled_item: ScheduledItem):
         self._post_dfs_slot_update(scheduled_item)
         del self._curr_schedule[scheduled_item.lt.identifier]
+        self._curr_bounding_score -= scheduled_item.b_score_contribution
 
     def _dfs(self, current_leaf: Node):
 
         expansions = self._get_expansions(current_leaf)
 
         if not expansions:
-            self.num_leafs += 1
+            self.num_leafs += 1 # for observability
             if len(self._curr_schedule) == len(self._input_data.lectures) + len(self._input_data.tutorials):
                 self._results.append(self._curr_schedule.copy())
+                self._min_eval = min(self._min_eval, self._get_eval_score())
             return
 
         for next_item in expansions:
