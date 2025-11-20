@@ -1,29 +1,28 @@
 
 
 from pathlib import Path
+
+import pytest
+
 from project.and_tree import AndTreeSearch
 from project.parser import get_input_data
 
 TEST_DIR = Path(__file__).parent
 INPUTS_DIR = TEST_DIR / "inputs"
 
-def test_section_penalty_simple():
-    input_data = get_input_data(INPUTS_DIR / "test_sec_pen_simple.txt", "1", "1", "1", "1", "1", "1", "1", "1") 
-    search = AndTreeSearch(input_data)
-    search.search()
-    
-    assert search.get_formatted_answer() == sorted(["CPSC 231 LEC 01, MO, 8:00", "CPSC 231 LEC 02, TU, 10:00", "CPSC 231 LEC 01 TUT 01, TU, 10:00"])
+OUTPUTS_DIR = TEST_DIR / "expected_outputs"
 
-def test_pref_penalty_simple():
-    input_data = get_input_data(INPUTS_DIR / "test_pref_pen_simple.txt", "1", "1", "1", "1", "1", "1", "1", "1") 
-    search = AndTreeSearch(input_data)
-    search.search()
-    
-    assert search.get_formatted_answer() == sorted(["CPSC 231 LEC 02, TU, 13:00", "CPSC 231 LEC 01, MO, 8:00", "CPSC 231 LEC 01 TUT 01, TU, 10:00"])
+input_files = sorted(INPUTS_DIR.glob("*.txt"))
 
-def test_pair_penalty_simple():
-    input_data = get_input_data(INPUTS_DIR / "test_pair_pen_simple.txt", "1", "1", "1", "1", "1", "1", "1", "1") 
+@pytest.mark.parametrize("input_path", input_files, ids=lambda p: p.name)
+def test_parser_output_matches_expected(input_path: Path):
+    expected_path = OUTPUTS_DIR / input_path.name
+    assert expected_path.exists(), f"Expected output file not found: {expected_path}"
+
+    input_data = get_input_data(input_path, "1", "1", "1", "1", "1", "1", "1", "1")
     search = AndTreeSearch(input_data)
     search.search()
-    
-    assert search.get_formatted_answer() == sorted(["CPSC 231 LEC 01, TU, 13:00", "CPSC 331 LEC 01, TU, 13:00", "CPSC 231 TUT 01, TU, 10:00"])
+
+    expected = expected_path.read_text()
+
+    assert search.get_formatted_answer() == expected

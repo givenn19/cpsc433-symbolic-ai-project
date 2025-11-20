@@ -1,7 +1,7 @@
 from __future__ import annotations
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Sequence, Union
+from typing import Dict, List, Mapping, Optional, Sequence, Union
 from project.models import LecTut, Lecture, LectureSlot, TutorialSlot, LecTutSlot, is_tut, is_lec
 from project.parser import InputData
 
@@ -34,6 +34,34 @@ class Node:
 
 def _overlap(start1: float, end1: float, start2: float, end2: float) -> bool:
     return not ((end1 < start2) or (end2 < start1))
+
+def _get_formatted_schedule(sched: Mapping[str, ScheduledItem]) -> str:
+    """Order lectures alphabetically, and put tutorials under their lecture"""
+    res = ""
+
+    lectures = sorted([item for item in sched.values() if is_lec(item.lt)], key=lambda x: x.lt.identifier)
+    tutorials = sorted([item for item in sched.values() if is_tut(item.lt)], key=lambda x: x.lt.identifier)
+
+    lec_tut_mapping = defaultdict(list)
+
+    for tut_sched in tutorials:
+        assert is_tut(tut_sched.lt)
+        lec_tut_mapping[tut_sched.lt.parent_lecture_id].append(tut_sched)
+    
+    all_ids = [item.lt.identifier for item in sched.values()]
+    max_orig = max((len(s) for s in all_ids), default=0)
+    target_width = max_orig + 2
+
+    lines: List[str] = []
+    for lec in lectures:
+        lec_display = lec.lt.identifier.ljust(target_width)
+        lines.append(f"{lec_display} : {lec.slot.day}, {lec.slot.time}")
+        for tut in sorted(lec_tut_mapping.get(lec.lt.identifier, []), key=lambda x: x.lt.identifier):
+            tut_display = tut.lt.identifier.ljust(target_width)
+            lines.append(f"{tut_display} : {tut.slot.day}, {tut.slot.time}")
+
+    return "\n".join(lines)
+
 
 class AndTreeSearch:
 
@@ -251,15 +279,12 @@ class AndTreeSearch:
             self._dfs(new_leaf)
             self._post_dfs_updates(next_item)
 
-    def get_formatted_answer(self) -> List[str]:
+    def get_formatted_answer(self) -> str:
         if not self.ans:
-            return []
-
-        res = []
-        for _, node in self.ans.items():
-            res.append(f"{node.lt.identifier}, {node.slot.day}, {node.slot.time}")
-
-        return sorted(res)
+            return ""
+        
+        print(_get_formatted_schedule(self.ans))
+        return _get_formatted_schedule(self.ans)
 
 
     def search(self):
