@@ -8,12 +8,6 @@ from project.models import LectureSlot, TutorialSlot, Tutorial, Lecture, NotComp
 
 logger = logging.getLogger(__name__)
 
-class DayTime(NamedTuple):
-    day: str
-    time: str
-
-class DayTimePref(DayTime):
-    pref_val: str
 
 @dataclass
 class InputData:
@@ -26,7 +20,7 @@ class InputData:
     unwanted: Dict[str, List[Unwanted]]
     preferences: Dict[str, Preference]
     pair: Dict[str, str]
-    part_assign: Dict[LecTut, DayTime]
+    part_assign: Dict[str, PartialAssignment]
     pen_lec_min: int
     pen_tut_min: int
     pen_not_paired: int
@@ -126,7 +120,10 @@ def get_input_data(path: str | Path, w_min_filled: str, w_pref: str, w_pair: str
         pref.pref_val *= int(w_pref)
         preferences[pref.identifier] = pref
 
-    part_assign: Dict[LecTut, DayTime] = {}
+    part_assign: Dict[str, PartialAssignment] = {}
+
+    for pa in parsed_file.part_assign:
+        part_assign[pa.identifier] = pa
 
     return InputData(
         name=parsed_file.name,

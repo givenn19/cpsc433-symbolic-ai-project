@@ -15,7 +15,7 @@ OUTPUTS_DIR = TEST_DIR / "expected_outputs"
 input_files = sorted(INPUTS_DIR.glob("*.txt"))
 
 @pytest.mark.parametrize("input_path", input_files, ids=lambda p: p.name)
-def test_parser_output_matches_expected(input_path: Path):
+def test_input_files(input_path: Path):
     expected_path = OUTPUTS_DIR / input_path.name
     assert expected_path.exists(), f"Expected output file not found: {expected_path}"
 

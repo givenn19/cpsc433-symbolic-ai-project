@@ -2,7 +2,7 @@ from __future__ import annotations
 from collections import OrderedDict, defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, List, Mapping, Optional, Sequence, Union
-from project.models import LecTut, Lecture, LectureSlot, TutorialSlot, LecTutSlot, is_tut, is_lec
+from project.models import LecTut, Lecture, LectureSlot, NotCompatible, TutorialSlot, LecTutSlot, is_tut, is_lec
 from project.parser import InputData
 
 @dataclass(frozen=True, slots=True)
@@ -31,13 +31,15 @@ class DummyScheduledItem(ScheduledItem):
 class Node:
     most_recent_item: ScheduledItem = field(default_factory=DummyScheduledItem)
 
+EVENING_TIME = 18
+LEVEL_5XX = 5
+
 
 def _overlap(start1: float, end1: float, start2: float, end2: float) -> bool:
     return not ((end1 < start2) or (end2 < start1))
 
 def _get_formatted_schedule(sched: Mapping[str, ScheduledItem]) -> str:
     """Order lectures alphabetically, and put tutorials under their lecture"""
-    res = ""
 
     lectures = sorted([item for item in sched.values() if is_lec(item.lt)], key=lambda x: x.lt.identifier)
     tutorials = sorted([item for item in sched.values() if is_tut(item.lt)], key=lambda x: x.lt.identifier)
@@ -71,11 +73,6 @@ class AndTreeSearch:
         self._open_lecture_slots = {item.identifier: item for item in self._input_data.lec_slots}
         self._open_tut_slots = {item.identifier: item for item in self._input_data.tut_slots}
 
-        self._5XX_lectures = OrderedDict({item.identifier: item for item in self._input_data.lectures if item.level == 5})
-        self._evening_lectures = OrderedDict({item.identifier: item for item in self._input_data.lectures if item.is_evening})
-        self._other_lectures = OrderedDict({item.identifier: item for item in self._input_data.lectures if item.identifier not in self._5XX_lectures and item.identifier not in self._evening_lectures})
-        self._tutorials = OrderedDict({item.identifier: item for item in self._input_data.tutorials})
-
         self._successors: Dict[str, LecTut] = {}
 
         self._curr_schedule: Dict[str, ScheduledItem] = {}
@@ -89,6 +86,8 @@ class AndTreeSearch:
         self.num_leafs = 0 # for observability
 
         self.ans: Optional[Dict[str, ScheduledItem]] = None
+
+        self.__init_schedule__()
     
     def _calc_bounding_score_contrib(self, next_lt: LecTut, next_slot: LecTutSlot) -> float:
         # Preference penalty
@@ -142,9 +141,9 @@ class AndTreeSearch:
             return True
         
         # Handle 5XX TIME OVERLAPS
-        if is_lec(next_lt) and next_lt.level == 5:
+        if is_lec(next_lt) and next_lt.level == LEVEL_5XX:
             for sched_item in self._curr_schedule.values():
-                if is_lec(sched_item.lt) and sched_item.lt.level == 5 and sched_item.slot.day == next_slot.day and sched_item.slot.start_time == next_slot.start_time:
+                if is_lec(sched_item.lt) and sched_item.lt.level == LEVEL_5XX and sched_item.slot.day == next_slot.day and sched_item.slot.start_time == next_slot.start_time:
                     return True
 
 
@@ -189,8 +188,8 @@ class AndTreeSearch:
         
         If the immediate priority is unavailable^:
         - Assign in this priority:
-            - A 5XX Lecture
             - An Evening Lecture
+            - A 5XX Lecture
             - Other lecture
             - Other tutorial
         """
@@ -211,7 +210,7 @@ class AndTreeSearch:
                     break
 
         if not chosen_lectut:
-            for lt_bucket in (self._5XX_lectures, self._evening_lectures, self._other_lectures, self._tutorials):
+            for lt_bucket in (self._evening_lectures, self._5XX_lectures, self._other_lectures, self._tutorials):
                 if lt_bucket:
                     _, chosen_lectut = lt_bucket.popitem(last=False)
                     break
@@ -224,6 +223,8 @@ class AndTreeSearch:
         
         expansions = []
         for _, os in open_slots.items():
+            if chosen_lectut.is_evening and os.start_time < EVENING_TIME:
+                continue
             if self._fail_hc(self._curr_schedule, chosen_lectut, os):
                 continue
             next_b_score = self._calc_bounding_score_contrib(chosen_lectut, os)
@@ -232,8 +233,69 @@ class AndTreeSearch:
             expansions.append(ScheduledItem(chosen_lectut, os, os.current_cap, next_b_score))
         return expansions
 
-    def _pre_process(self) -> Node:
-        return Node (DummyScheduledItem())
+    def __init_schedule__(self):
+        # remove Tuesday @ 11-12:30 from slots
+        for key, slot in self._open_lecture_slots.items():
+            if slot.day == "TU" and slot.time == "11:00":
+                del self._open_lecture_slots[key]
+
+        
+        initial_schedule: Dict[str, ScheduledItem] = {}
+        self._all_lectures = {item.identifier: item for item in self._input_data.lectures}
+        self._tutorials = OrderedDict({item.identifier: item for item in self._input_data.tutorials})
+
+        # partial assignments
+
+        # Assign 851 and 913 to TU 18:00 if they exist  
+        special_time_slot = LectureSlot("TU", "18:00", 2, 0, 0)   
+        special_time_slot.end_time = 19
+        for key, lec in self._all_lectures.items():
+            if lec.lecture_id in ("CPSC 851", "CPSC 913"):
+                initial_schedule[lec.identifier] = ScheduledItem(lec, special_time_slot, 0, 0)
+        
+        # the rest of the partial assignments
+        for lt_id, p_assign in self._input_data.part_assign.items():
+            if lt_id in self._tutorials:
+                lt = self._tutorials[lt_id]
+                lt_bucket = self._tutorials
+            elif lt_id in self._all_lectures:
+                lt = self._all_lectures[lt_id]
+                lt_bucket = self._all_lectures
+            else:
+                raise Exception(f"The partial assignment for lecture / tutorial {lt_id} failed because it does not exist in the schedule.")
+            open_slots = self._open_lecture_slots if is_lec(lt) else self._open_tut_slots
+            for slot in open_slots.values():
+                if slot.day == p_assign.day and slot.time == p_assign.time:
+                    b_score = self._calc_bounding_score_contrib(lt, slot)
+                    self._curr_bounding_score += b_score
+                    initial_schedule[lt_id] = ScheduledItem(lt, slot, slot.current_cap, b_score)
+                    del lt_bucket[lt_id]
+                    break
+            else:
+                raise Exception(f"The slot for partial assignment {lt_id} {p_assign.day} {p_assign.time} does not exist.")
+        
+        self._curr_schedule = initial_schedule
+        
+        # Add incompatible statements with all CPSC 331 + 851 and CPSC 413 + CPSC 913
+        for id_331, lt_331 in (self._all_lectures | self._tutorials).items():
+            if is_lec(lt_331) and lt_331.lecture_id != "CPSC 331" or is_tut(lt_331) and lt_331.parent_lecture_id != "CPSC 331":
+                continue
+            for id_851, lt_851 in self._all_lectures.items():
+                if is_lec(lt_851) and lt_851.lecture_id != "CPSC 851" or is_tut(lt_851) and lt_851.parent_lecture_id != "CPSC 851":
+                    continue
+                self._input_data.not_compatible.append(NotCompatible(id_331, id_851))
+
+        for id_413, lt_413 in (self._all_lectures | self._tutorials).items():
+            if is_lec(lt_413) and lt_413.lecture_id != "CPSC 413" or is_tut(lt_413) and lt_413.parent_lecture_id != "CPSC 413":
+                continue
+            for id_913, lt_913 in self._all_lectures.items():
+                if is_lec(lt_913) and lt_913.lecture_id != "CPSC 913" or is_tut(lt_913) and lt_913.parent_lecture_id != "CPSC 913":
+                    continue
+                self._input_data.not_compatible.append(NotCompatible(id_413, id_913))
+
+        self._5XX_lectures = OrderedDict({item.identifier: item for item in self._all_lectures.values() if item.level == LEVEL_5XX})
+        self._evening_lectures = OrderedDict({item.identifier: item for item in self._all_lectures.values() if item.is_evening})
+        self._other_lectures = OrderedDict({item.identifier: item for item in self._all_lectures.values() if item.identifier not in self._5XX_lectures and item.identifier not in self._evening_lectures})
     
     def _pre_dfs_slot_update(self, sched_item: ScheduledItem) -> None:
         slot = sched_item.slot
@@ -282,15 +344,13 @@ class AndTreeSearch:
     def get_formatted_answer(self) -> str:
         if not self.ans:
             return ""
-        
-        print(_get_formatted_schedule(self.ans))
         return _get_formatted_schedule(self.ans)
 
 
     def search(self):
 
-        s_0 = self._pre_process()
-        self._dfs(s_0)
+        root = Node(DummyScheduledItem())
+        self._dfs(root)
 
 
         return self._results, self.ans
