@@ -27,7 +27,6 @@ class InputData:
     preferences: Dict[str, Preference]
     pair: Dict[str, str]
     part_assign: Dict[LecTut, DayTime]
-    w_min_filled: str
     pen_lec_min: int
     pen_tut_min: int
     pen_not_paired: int
@@ -140,9 +139,8 @@ def get_input_data(path: str | Path, w_min_filled: str, w_pref: str, w_pair: str
         preferences=preferences,
         pair=pair,
         part_assign=part_assign,
-        w_min_filled=w_min_filled,
-        pen_lec_min=int(pen_lec_min),
+        pen_lec_min=int(pen_lec_min)*int(w_min_filled),
         pen_not_paired=int(pen_not_paired)*int(w_pair),
-        pen_tut_min=int(pen_tut_min),
+        pen_tut_min=int(pen_tut_min)*int(w_min_filled),
         pen_section=int(pen_section)*int(w_sec_diff)
     )

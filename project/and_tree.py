@@ -90,10 +90,18 @@ class AndTreeSearch:
         return b_score
     
     def _get_eval_score(self):
-        """
-        KEEP TRACK OF CURRENT EVAL SCORE FOR SPEED INSTEAD
-        """
-        return self._curr_bounding_score
+        """This can most likley be optimized"""
+
+        tut_min_pen = 0
+        lec_min_pen = 0
+
+        for slot in self._open_lecture_slots.values():
+            lec_min_pen += max(slot.min_cap - slot.current_cap, 0) * self._input_data.pen_lec_min
+
+        for slot in self._open_tut_slots.values():
+            tut_min_pen += max(slot.min_cap - slot.current_cap, 0) * self._input_data.pen_tut_min
+
+        return self._curr_bounding_score + lec_min_pen + tut_min_pen
     
     def _fail_hc(self, curr_sched: Dict[str, ScheduledItem], next_lt: LecTut, next_slot: LecTutSlot) -> bool:
 
