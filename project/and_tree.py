@@ -34,7 +34,6 @@ class Node:
 EVENING_TIME = 18
 LEVEL_5XX = 5
 
-
 def _overlap(start1: float, end1: float, start2: float, end2: float) -> bool:
     return not ((end1 < start2) or (end2 < start1))
 
@@ -87,7 +86,7 @@ class AndTreeSearch:
 
         self.ans: Optional[Dict[str, ScheduledItem]] = None
 
-        self.__init_schedule__()
+        self._init_schedule()
     
     def _calc_bounding_score_contrib(self, next_lt: LecTut, next_slot: LecTutSlot) -> float:
         # Preference penalty
@@ -143,7 +142,7 @@ class AndTreeSearch:
         # Handle 5XX TIME OVERLAPS
         if is_lec(next_lt) and next_lt.level == LEVEL_5XX:
             for sched_item in self._curr_schedule.values():
-                if is_lec(sched_item.lt) and sched_item.lt.level == LEVEL_5XX and sched_item.slot.day == next_slot.day and sched_item.slot.start_time == next_slot.start_time:
+                if is_lec(sched_item.lt) and sched_item.lt.level == LEVEL_5XX and sched_item.slot.day == next_slot.day and _overlap(sched_item.slot.start_time, next_slot.end_time, sched_item.slot.start_time, next_slot.end_time):
                     return True
 
 
@@ -233,11 +232,9 @@ class AndTreeSearch:
             expansions.append(ScheduledItem(chosen_lectut, os, os.current_cap, next_b_score))
         return expansions
 
-    def __init_schedule__(self):
+    def _init_schedule(self):
         # remove Tuesday @ 11-12:30 from slots
-        for key, slot in self._open_lecture_slots.items():
-            if slot.day == "TU" and slot.time == "11:00":
-                del self._open_lecture_slots[key]
+        self._open_lecture_slots = {k: v for k, v in self._open_lecture_slots.items() if not (v.day == "TU" and v.time == "11:00")}
 
         
         initial_schedule: Dict[str, ScheduledItem] = {}
