@@ -1,0 +1,5 @@
+Tutorial slots:
+TU, 11:00, 2, 0,0
+
+Tutorials:
+CPSC 231 LAB 01, false

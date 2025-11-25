@@ -60,7 +60,12 @@ def _get_formatted_schedule(sched: Mapping[str, ScheduledItem]) -> str:
         for tut in sorted(lec_tut_mapping.get(lec.lt.identifier, []), key=lambda x: x.lt.identifier):
             tut_display = tut.lt.identifier.ljust(target_width)
             lines.append(f"{tut_display} : {tut.slot.day}, {tut.slot.time}")
+            tutorials.remove(tut)
 
+    # add any remaining tutorials
+    for tut in tutorials:
+        tut_display = tut.lt.identifier.ljust(target_width)
+        lines.append(f"{tut_display} : {tut.slot.day}, {tut.slot.time}")
     return "\n".join(lines)
 
 
@@ -87,6 +92,8 @@ class AndTreeSearch:
         self.ans: Optional[Dict[str, ScheduledItem]] = None
 
         self._init_schedule()
+
+        print(input_data)
     
     def _calc_bounding_score_contrib(self, next_lt: LecTut, next_slot: LecTutSlot) -> float:
         # Preference penalty

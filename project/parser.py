@@ -63,7 +63,6 @@ def _parse_file(path: str | Path):
             line = raw.strip()
             if not line:
                 continue
-            line = line.replace("LAB", "TUT")
             logger.info(line)
 
             if line in headers:
