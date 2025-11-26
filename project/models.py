@@ -30,11 +30,11 @@ class BaseSlot(CSVParsable):
     min_cap: int
     alt_max: int
     identifier: str = field(default="", init=False)
-    identifier_suffix: str = field(default="", init=False)
     start_time: float = field(init=False)
     end_time: float = field(init=False)
     current_cap: int = field(default=0, init=False)
     current_alt_cap: int = field(default=0, init=False)
+    identifier_suffix = ""
 
     def __post_init__(self) -> None:
         self.start_time, self.end_time, =_calc_start_end_times(self.time, self.day, self.identifier_suffix)

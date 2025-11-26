@@ -92,8 +92,8 @@ class AndTreeSearch:
         self.ans: Optional[Dict[str, ScheduledItem]] = None
 
         self._init_schedule()
+        print(input_data.not_compatible)
 
-        print(input_data)
     
     def _calc_bounding_score_contrib(self, next_lt: LecTut, next_slot: LecTutSlot) -> float:
         # Preference penalty
@@ -149,14 +149,14 @@ class AndTreeSearch:
         # Handle 5XX TIME OVERLAPS
         if is_lec(next_lt) and next_lt.level == LEVEL_5XX:
             for sched_item in self._curr_schedule.values():
-                if is_lec(sched_item.lt) and sched_item.lt.level == LEVEL_5XX and sched_item.slot.day == next_slot.day and _overlap(sched_item.slot.start_time, next_slot.end_time, sched_item.slot.start_time, next_slot.end_time):
+                if is_lec(sched_item.lt) and sched_item.lt.level == LEVEL_5XX and sched_item.slot.day == next_slot.day and _overlap(sched_item.slot.start_time, sched_item.slot.end_time, next_slot.start_time, next_slot.end_time):
                     return True
 
 
         # Handle tutorial and lecture TIME OVERLAPS
         if is_tut(next_lt) and next_lt.parent_lecture_id in curr_sched:
             sched_lecture = curr_sched[next_lt.parent_lecture_id]
-            if _overlap(sched_lecture.slot.start_time, sched_lecture.slot.end_time, next_slot.start_time, next_slot.end_time):
+            if sched_lecture.slot.day == sched_lecture.slot.day and _overlap(sched_lecture.slot.start_time, sched_lecture.slot.end_time, next_slot.start_time, next_slot.end_time):
                 return True
 
         # Handle not compatible TIME OVERLAPS
@@ -170,7 +170,7 @@ class AndTreeSearch:
                 sched_item = curr_sched[id2]
             else:
                 continue
-            if _overlap(sched_item.slot.start_time, sched_item.slot.end_time, next_slot.start_time, next_slot.end_time):
+            if sched_item.slot.day == next_slot.day and _overlap(sched_item.slot.start_time, sched_item.slot.end_time, next_slot.start_time, next_slot.end_time):
                 return True
 
         # Handle unwanted SLOT ASSIGNMENTS
@@ -281,19 +281,18 @@ class AndTreeSearch:
         self._curr_schedule = initial_schedule
         
         # Add incompatible statements with all CPSC 331 + 851 and CPSC 413 + CPSC 913
-        for id_331, lt_331 in (self._all_lectures | self._tutorials).items():
-            if is_lec(lt_331) and lt_331.lecture_id != "CPSC 331" or is_tut(lt_331) and lt_331.parent_lecture_id != "CPSC 331":
+        for id_351, lt_351 in (self._all_lectures | self._tutorials).items():
+            if is_lec(lt_351) and lt_351.lecture_id != "CPSC 351" or is_tut(lt_351) and "CPSC 351" not in lt_351.parent_lecture_id: 
                 continue
-            for id_851, lt_851 in self._all_lectures.items():
-                if is_lec(lt_851) and lt_851.lecture_id != "CPSC 851" or is_tut(lt_851) and lt_851.parent_lecture_id != "CPSC 851":
+            for id_851, lt_851 in (self._all_lectures | self._tutorials).items():
+                if is_lec(lt_851) and lt_851.lecture_id != "CPSC 851" or is_tut(lt_851) and "CPSC 851" not in lt_851.parent_lecture_id: 
                     continue
-                self._input_data.not_compatible.append(NotCompatible(id_331, id_851))
-
+                self._input_data.not_compatible.append(NotCompatible(id_351, id_851))
         for id_413, lt_413 in (self._all_lectures | self._tutorials).items():
-            if is_lec(lt_413) and lt_413.lecture_id != "CPSC 413" or is_tut(lt_413) and lt_413.parent_lecture_id != "CPSC 413":
+            if is_lec(lt_413) and lt_413.lecture_id != "CPSC 413" or is_tut(lt_413) and "CPSC 413" not in lt_413.parent_lecture_id:
                 continue
-            for id_913, lt_913 in self._all_lectures.items():
-                if is_lec(lt_913) and lt_913.lecture_id != "CPSC 913" or is_tut(lt_913) and lt_913.parent_lecture_id != "CPSC 913":
+            for id_913, lt_913 in (self._all_lectures | self._tutorials).items():
+                if is_lec(lt_913) and lt_913.lecture_id != "CPSC 913" or is_tut(lt_913) and "CPSC 913" not in lt_913.parent_lecture_id:
                     continue
                 self._input_data.not_compatible.append(NotCompatible(id_413, id_913))
 
