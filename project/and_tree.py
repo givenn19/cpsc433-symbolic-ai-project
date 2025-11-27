@@ -6,12 +6,14 @@ from project.models import LecTut, Lecture, LectureSlot, NotCompatible, Tutorial
 from project.parser import InputData
 
 
+
 @dataclass(frozen=True, slots=True)
 class ScheduledItem:                # ScheduledItem: represents one actual assignment
     lt: LecTut                      # a lecture or tutorial
     slot: LecTutSlot                # a slot
     cap_at_assign: int              # a capacity snapshot
     b_score_contribution: float     # a bounding score (pentaly contribution) for pruning
+
 
 
 # Dummy objects used for initializing the DFS tree's root node
@@ -31,6 +33,7 @@ class DummyScheduledItem(ScheduledItem):
     b_score_contribution: float = 0
 
 
+
 # Represents a node in the DFS tree
 # Stores most recent ScheduledItem added, so the search knows what to expand next
 @dataclass(frozen=True, slots=True)
@@ -38,8 +41,10 @@ class Node:
     most_recent_item: ScheduledItem = field(default_factory=DummyScheduledItem) 
 
 
+
 EVENING_TIME = 18
 LEVEL_5XX = 5
+
 
 
 # Returns whether two time intervals overlap
@@ -85,6 +90,8 @@ def _get_formatted_schedule(sched: Mapping[str, ScheduledItem]) -> str:
     
     return "\n".join(lines)
 
+
+##################################################################################################################################
 
 
 class AndTreeSearch:
@@ -256,14 +263,12 @@ class AndTreeSearch:
             else:
                 return [] # If there are no remaining items, no expansions
 
-
         # Store chosen successor for the item
         self._successors[leaf.most_recent_item.lt.identifier] = chosen_lectut
 
         # Pick slots
         open_slots = self._open_lecture_slots if is_lec(chosen_lectut) else self._open_tut_slots
         
-
         expansions = []
         for _, os in open_slots.items():
 
@@ -295,7 +300,7 @@ class AndTreeSearch:
         self._all_lectures = {item.identifier: item for item in self._input_data.lectures}                  # all unscheduled lectures
         self._all_tutorials = OrderedDict({item.identifier: item for item in self._input_data.tutorials})   # all unscheduled tutorials
 
-        # Partial assignments
+        # Partial assignments:
 
         # Assign 851 and 913 to TU 18:00 if they exist  
         special_time_slot = LectureSlot("TU", "18:00", 2, 0, 0)   
@@ -348,31 +353,35 @@ class AndTreeSearch:
         self._evening_lectures = OrderedDict({item.identifier: item for item in self._all_lectures.values() if item.is_evening})
         self._other_lectures = OrderedDict({item.identifier: item for item in self._all_lectures.values() if item.identifier not in self._5XX_lectures and item.identifier not in self._evening_lectures})
     
+
+    # Update slot usages before recursion
     def _pre_dfs_slot_update(self, sched_item: ScheduledItem) -> None:
         slot = sched_item.slot
-
         slot.current_cap += 1
-
         if sched_item.lt.alrequired:
             slot.current_alt_cap += 1
     
+    # Undo slot usage after recursion
     def _post_dfs_slot_update(self, sched_item: ScheduledItem) -> None:
         slot = sched_item.slot
         slot.current_cap -= 1
-        
         if sched_item.lt.alrequired:
             slot.current_alt_cap -= 1
 
+    # Apply updates when trying an item
     def _pre_dfs_updates(self, scheduled_item: ScheduledItem):
         self._pre_dfs_slot_update(scheduled_item)
         self._curr_schedule[scheduled_item.lt.identifier] = scheduled_item
         self._curr_bounding_score += scheduled_item.b_score_contribution
 
+    # Undo updates when backtracking
     def _post_dfs_updates(self, scheduled_item: ScheduledItem):
         self._post_dfs_slot_update(scheduled_item)
         del self._curr_schedule[scheduled_item.lt.identifier]
         self._curr_bounding_score -= scheduled_item.b_score_contribution
 
+
+    # Depth first search over all schedules
     def _dfs(self, current_leaf: Node):
 
         # Get expansions for the current node
@@ -396,18 +405,15 @@ class AndTreeSearch:
             self._post_dfs_updates(next_item)
 
 
+    # Coverts best answer to a formatted string
     def get_formatted_answer(self) -> str:
         if not self.ans:
             return ""
         return _get_formatted_schedule(self.ans)
 
 
+    # Starts search process
     def search(self):
-
         root = Node(DummyScheduledItem())
         self._dfs(root)
-
-
         return self._results, self.ans
-    
-
