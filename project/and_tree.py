@@ -5,20 +5,23 @@ from typing import Dict, List, Mapping, Optional, Sequence, Union
 from project.models import LecTut, Lecture, LectureSlot, NotCompatible, TutorialSlot, LecTutSlot, is_tut, is_lec
 from project.parser import InputData
 
-@dataclass(frozen=True, slots=True)
-class ScheduledItem:
-    lt: LecTut
-    slot: LecTutSlot
-    cap_at_assign: int
-    b_score_contribution: float
 
+@dataclass(frozen=True, slots=True)
+class ScheduledItem:                # ScheduledItem: represents one actual assignment
+    lt: LecTut                      # a lecture or tutorial
+    slot: LecTutSlot                # a slot
+    cap_at_assign: int              # a capacity snapshot
+    b_score_contribution: float     # a bounding score for pruning
+
+# Dummy lec/tut: so the root of the DFS has a previous item
 @dataclass
-class DummyLecTut(LecTut):
-    identifier: str = "DMM 123 LEC 01"
+class DummyLecTut(LecTut):   
+    identifier: str = "DMM 123 LEC 01" 
     alrequired: bool = False
 
+# Dummy assignment: so the root of the DFS has a previous item
 @dataclass(frozen=True)
-class DummyScheduledItem(ScheduledItem):
+class DummyScheduledItem(ScheduledItem):  
     lt: LecTut = field(default_factory=DummyLecTut)
     start_time: float = 0.0
     end_time: float = 0.0
@@ -27,9 +30,11 @@ class DummyScheduledItem(ScheduledItem):
     cap_at_assign: int = 0
     b_score_contribution: float = 0
 
+# Node: represents a node in the DFS tree
+# Stores most recent item added, so the search knows what to expand next
 @dataclass(frozen=True, slots=True)
-class Node:
-    most_recent_item: ScheduledItem = field(default_factory=DummyScheduledItem)
+class Node:  
+    most_recent_item: ScheduledItem = field(default_factory=DummyScheduledItem) 
 
 EVENING_TIME = 18
 LEVEL_5XX = 5
@@ -74,12 +79,12 @@ class AndTreeSearch:
     def __init__(self, input_data: InputData) -> None:
         self._input_data = input_data
 
-        self._open_lecture_slots = {item.identifier: item for item in self._input_data.lec_slots}
-        self._open_tut_slots = {item.identifier: item for item in self._input_data.tut_slots}
+        self._open_lecture_slots = {item.identifier: item for item in self._input_data.lec_slots}   # all possible lec slots
+        self._open_tut_slots = {item.identifier: item for item in self._input_data.tut_slots}       # all possible tut slots
 
         self._successors: Dict[str, LecTut] = {}
 
-        self._curr_schedule: Dict[str, ScheduledItem] = {}
+        self._curr_schedule: Dict[str, ScheduledItem] = {} # mapping from lec/tut ID to ScheduledItem
 
         self._curr_bounding_score = 0
 
@@ -205,18 +210,18 @@ class AndTreeSearch:
         if (ident := leaf.most_recent_item.lt.identifier) in self._successors:
             chosen_lectut = self._successors[ident]
         elif is_lec((lec := leaf.most_recent_item.lt)):
-            for t_id, tut in self._tutorials.items():
+            for t_id, tut in self._all_tutorials.items():
                 if tut.parent_lecture_id == lec.identifier:
-                    chosen_lectut = self._tutorials.pop(t_id)
+                    chosen_lectut = self._all_tutorials.pop(t_id)
                     break
         elif is_tut((most_recent_tut := leaf.most_recent_item.lt)):
-            for t_id, tut in self._tutorials.items():
+            for t_id, tut in self._all_tutorials.items():
                 if tut.parent_lecture_id == most_recent_tut.parent_lecture_id:
-                    chosen_lectut = self._tutorials.pop(t_id)
+                    chosen_lectut = self._all_tutorials.pop(t_id)
                     break
 
         if not chosen_lectut:
-            for lt_bucket in (self._evening_lectures, self._5XX_lectures, self._other_lectures, self._tutorials):
+            for lt_bucket in (self._evening_lectures, self._5XX_lectures, self._other_lectures, self._all_tutorials):
                 if lt_bucket:
                     _, chosen_lectut = lt_bucket.popitem(last=False)
                     break
@@ -246,7 +251,7 @@ class AndTreeSearch:
         
         initial_schedule: Dict[str, ScheduledItem] = {}
         self._all_lectures = {item.identifier: item for item in self._input_data.lectures}
-        self._tutorials = OrderedDict({item.identifier: item for item in self._input_data.tutorials})
+        self._all_tutorials = OrderedDict({item.identifier: item for item in self._input_data.tutorials})
 
         # partial assignments
 
@@ -259,9 +264,9 @@ class AndTreeSearch:
         
         # the rest of the partial assignments
         for lt_id, p_assign in self._input_data.part_assign.items():
-            if lt_id in self._tutorials:
-                lt = self._tutorials[lt_id]
-                lt_bucket = self._tutorials
+            if lt_id in self._all_tutorials:
+                lt = self._all_tutorials[lt_id]
+                lt_bucket = self._all_tutorials
             elif lt_id in self._all_lectures:
                 lt = self._all_lectures[lt_id]
                 lt_bucket = self._all_lectures
@@ -281,17 +286,17 @@ class AndTreeSearch:
         self._curr_schedule = initial_schedule
         
         # Add incompatible statements with all CPSC 331 + 851 and CPSC 413 + CPSC 913
-        for id_351, lt_351 in (self._all_lectures | self._tutorials).items():
+        for id_351, lt_351 in (self._all_lectures | self._all_tutorials).items():
             if is_lec(lt_351) and lt_351.lecture_id != "CPSC 351" or is_tut(lt_351) and "CPSC 351" not in lt_351.parent_lecture_id: 
                 continue
-            for id_851, lt_851 in (self._all_lectures | self._tutorials).items():
+            for id_851, lt_851 in (self._all_lectures | self._all_tutorials).items():
                 if is_lec(lt_851) and lt_851.lecture_id != "CPSC 851" or is_tut(lt_851) and "CPSC 851" not in lt_851.parent_lecture_id: 
                     continue
                 self._input_data.not_compatible.append(NotCompatible(id_351, id_851))
-        for id_413, lt_413 in (self._all_lectures | self._tutorials).items():
+        for id_413, lt_413 in (self._all_lectures | self._all_tutorials).items():
             if is_lec(lt_413) and lt_413.lecture_id != "CPSC 413" or is_tut(lt_413) and "CPSC 413" not in lt_413.parent_lecture_id:
                 continue
-            for id_913, lt_913 in (self._all_lectures | self._tutorials).items():
+            for id_913, lt_913 in (self._all_lectures | self._all_tutorials).items():
                 if is_lec(lt_913) and lt_913.lecture_id != "CPSC 913" or is_tut(lt_913) and "CPSC 913" not in lt_913.parent_lecture_id:
                     continue
                 self._input_data.not_compatible.append(NotCompatible(id_413, id_913))
