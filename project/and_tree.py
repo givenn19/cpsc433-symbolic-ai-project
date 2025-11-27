@@ -42,6 +42,7 @@ LEVEL_5XX = 5
 def _overlap(start1: float, end1: float, start2: float, end2: float) -> bool:
     return not ((end1 < start2) or (end2 < start1))
 
+# Turns best schedule into a readable timetable
 def _get_formatted_schedule(sched: Mapping[str, ScheduledItem]) -> str:
     """Order lectures alphabetically, and put tutorials under their lecture"""
 
@@ -82,24 +83,24 @@ class AndTreeSearch:
         self._open_lecture_slots = {item.identifier: item for item in self._input_data.lec_slots}   # all possible lec slots
         self._open_tut_slots = {item.identifier: item for item in self._input_data.tut_slots}       # all possible tut slots
 
-        self._successors: Dict[str, LecTut] = {}
+        self._successors: Dict[str, LecTut] = {}            # _successors: used for expanding lec/tut in a sequence
 
-        self._curr_schedule: Dict[str, ScheduledItem] = {} # mapping from lec/tut ID to ScheduledItem
+        self._curr_schedule: Dict[str, ScheduledItem] = {}  # _curr_schedule: mapping from lec/tut ID to ScheduledItem
 
-        self._curr_bounding_score = 0
+        self._curr_bounding_score = 0                       # _curr_bounding_score: penalty so far
 
-        self._min_eval = float('inf')
+        self._min_eval = float('inf')                       # _min_eval: best full schedule's score found so far
 
-        self._results = []
+        self._results = []                                  # _results: all full schedules found
 
         self.num_leafs = 0 # for observability
 
-        self.ans: Optional[Dict[str, ScheduledItem]] = None
+        self.ans: Optional[Dict[str, ScheduledItem]] = None # ans: best schedule found
 
         self._init_schedule()
         print(input_data.not_compatible)
 
-    
+    # Calculates bounding score based on penalties, for pruning
     def _calc_bounding_score_contrib(self, next_lt: LecTut, next_slot: LecTutSlot) -> float:
         # Preference penalty
         pref_pen = 0
@@ -113,7 +114,6 @@ class AndTreeSearch:
             pair_pen = self._input_data.pen_not_paired
         
         # Section penalty
-
         section_pen = 0
         if not is_lec(next_lt):
             return pref_pen + pair_pen
@@ -127,6 +127,7 @@ class AndTreeSearch:
         b_score = pref_pen + pair_pen + section_pen
         return b_score
     
+
     def _get_eval_score(self):
         """This can most likley be optimized"""
 
@@ -141,6 +142,9 @@ class AndTreeSearch:
 
         return self._curr_bounding_score + lec_min_pen + tut_min_pen
     
+
+    # Checks whether assigning a lec/tut to a slot violates any hard constraint
+    # If any rule is violated: return True (fail)
     def _fail_hc(self, curr_sched: Dict[str, ScheduledItem], next_lt: LecTut, next_slot: LecTutSlot) -> bool:
 
         # Handle cap limit
@@ -156,7 +160,6 @@ class AndTreeSearch:
             for sched_item in self._curr_schedule.values():
                 if is_lec(sched_item.lt) and sched_item.lt.level == LEVEL_5XX and sched_item.slot.day == next_slot.day and _overlap(sched_item.slot.start_time, sched_item.slot.end_time, next_slot.start_time, next_slot.end_time):
                     return True
-
 
         # Handle tutorial and lecture TIME OVERLAPS
         if is_tut(next_lt) and next_lt.parent_lecture_id in curr_sched:
@@ -179,7 +182,6 @@ class AndTreeSearch:
                 return True
 
         # Handle unwanted SLOT ASSIGNMENTS
-
         if (ident := next_lt.identifier) in self._input_data.unwanted:
             for uw in self._input_data.unwanted[ident]:
                 if next_slot.day == uw.day and next_slot.start_time == uw.start_time:
@@ -188,16 +190,19 @@ class AndTreeSearch:
         return False
     
 
+    # Determines which lecture/tutorial to assign next, using a heuristic.
+    # Determines which slot options are valid (capacity, compatibility, unwanted times, etc.)
+    # Returns a list of ScheduledItem objects that correspond to valid options.
     def _get_expansions(self, leaf: Node) -> List[ScheduledItem]:
         """
-        Expansion ordering
+        Expansion ordering heuristic:
 
         If most recent assignment is a lecture:
             - Assign its tutorial
         If most recent assignment is a tutorial:
             - Assign its next related tutorial if available (Ex CPSC LEC 01 TUT 03 if TUT 02 was just assigned)
         
-        If the immediate priority is unavailable^:
+        Otherwise, if the immediate priority is unavailable^:
         - Assign in this priority:
             - An Evening Lecture
             - A 5XX Lecture
@@ -248,12 +253,12 @@ class AndTreeSearch:
         # remove Tuesday @ 11-12:30 from slots
         self._open_lecture_slots = {k: v for k, v in self._open_lecture_slots.items() if not (v.day == "TU" and v.time == "11:00")}
 
-        
+        # Loads all lectures and tutorials
         initial_schedule: Dict[str, ScheduledItem] = {}
-        self._all_lectures = {item.identifier: item for item in self._input_data.lectures}
-        self._all_tutorials = OrderedDict({item.identifier: item for item in self._input_data.tutorials})
+        self._all_lectures = {item.identifier: item for item in self._input_data.lectures}                  # all unscheduled lectures
+        self._all_tutorials = OrderedDict({item.identifier: item for item in self._input_data.tutorials})   # all unscheduled tutorials
 
-        # partial assignments
+        # Partial assignments
 
         # Assign 851 and 913 to TU 18:00 if they exist  
         special_time_slot = LectureSlot("TU", "18:00", 2, 0, 0)   
@@ -301,6 +306,7 @@ class AndTreeSearch:
                     continue
                 self._input_data.not_compatible.append(NotCompatible(id_413, id_913))
 
+        # Priority lectures (evening -> 5XX -> other lec -> other tut)
         self._5XX_lectures = OrderedDict({item.identifier: item for item in self._all_lectures.values() if item.level == LEVEL_5XX})
         self._evening_lectures = OrderedDict({item.identifier: item for item in self._all_lectures.values() if item.is_evening})
         self._other_lectures = OrderedDict({item.identifier: item for item in self._all_lectures.values() if item.identifier not in self._5XX_lectures and item.identifier not in self._evening_lectures})
@@ -332,8 +338,10 @@ class AndTreeSearch:
 
     def _dfs(self, current_leaf: Node):
 
+        # Get expansions for the current node
         expansions = self._get_expansions(current_leaf)
 
+        # If there are no expansions and all lec/tut are assigned, update ans if best score improved
         if not expansions:
             self.num_leafs += 1 # for observability
             if len(self._curr_schedule) == len(self._input_data.lectures) + len(self._input_data.tutorials):
@@ -343,11 +351,13 @@ class AndTreeSearch:
                     self._min_eval = ev
             return
 
+        # Otherwise, for each expansion, apply slot/score updates, recurse, and undo updates
         for next_item in expansions:
             new_leaf = Node(most_recent_item=next_item)
             self._pre_dfs_updates(next_item)
             self._dfs(new_leaf)
             self._post_dfs_updates(next_item)
+
 
     def get_formatted_answer(self) -> str:
         if not self.ans:
