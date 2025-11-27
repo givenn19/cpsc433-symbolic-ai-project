@@ -11,15 +11,15 @@ class ScheduledItem:                # ScheduledItem: represents one actual assig
     lt: LecTut                      # a lecture or tutorial
     slot: LecTutSlot                # a slot
     cap_at_assign: int              # a capacity snapshot
-    b_score_contribution: float     # a bounding score for pruning
+    b_score_contribution: float     # a bounding score (pentaly contribution) for pruning
 
-# Dummy lec/tut: so the root of the DFS has a previous item
+
+# Dummy objects used for initializing the DFS tree's root node
 @dataclass
 class DummyLecTut(LecTut):   
     identifier: str = "DMM 123 LEC 01" 
     alrequired: bool = False
 
-# Dummy assignment: so the root of the DFS has a previous item
 @dataclass(frozen=True)
 class DummyScheduledItem(ScheduledItem):  
     lt: LecTut = field(default_factory=DummyLecTut)
@@ -30,90 +30,105 @@ class DummyScheduledItem(ScheduledItem):
     cap_at_assign: int = 0
     b_score_contribution: float = 0
 
-# Node: represents a node in the DFS tree
-# Stores most recent item added, so the search knows what to expand next
+
+# Represents a node in the DFS tree
+# Stores most recent ScheduledItem added, so the search knows what to expand next
 @dataclass(frozen=True, slots=True)
 class Node:  
     most_recent_item: ScheduledItem = field(default_factory=DummyScheduledItem) 
 
+
 EVENING_TIME = 18
 LEVEL_5XX = 5
 
+
+# Returns whether two time intervals overlap
 def _overlap(start1: float, end1: float, start2: float, end2: float) -> bool:
     return not ((end1 < start2) or (end2 < start1))
+
 
 # Turns best schedule into a readable timetable
 def _get_formatted_schedule(sched: Mapping[str, ScheduledItem]) -> str:
     """Order lectures alphabetically, and put tutorials under their lecture"""
-
+    
+    # Seperate lectures and tutorials
     lectures = sorted([item for item in sched.values() if is_lec(item.lt)], key=lambda x: x.lt.identifier)
     tutorials = sorted([item for item in sched.values() if is_tut(item.lt)], key=lambda x: x.lt.identifier)
 
+    # Map each lecture to the list of its tutorials
     lec_tut_mapping = defaultdict(list)
 
     for tut_sched in tutorials:
         assert is_tut(tut_sched.lt)
         lec_tut_mapping[tut_sched.lt.parent_lecture_id].append(tut_sched)
     
+    # Compute width for printing
     all_ids = [item.lt.identifier for item in sched.values()]
     max_orig = max((len(s) for s in all_ids), default=0)
     target_width = max_orig + 2
 
+    # Build output lines
     lines: List[str] = []
     for lec in lectures:
         lec_display = lec.lt.identifier.ljust(target_width)
         lines.append(f"{lec_display} : {lec.slot.day}, {lec.slot.time}")
+        
         for tut in sorted(lec_tut_mapping.get(lec.lt.identifier, []), key=lambda x: x.lt.identifier):
             tut_display = tut.lt.identifier.ljust(target_width)
             lines.append(f"{tut_display} : {tut.slot.day}, {tut.slot.time}")
             tutorials.remove(tut)
 
-    # add any remaining tutorials
+    # Add any remaining tutorials
     for tut in tutorials:
         tut_display = tut.lt.identifier.ljust(target_width)
         lines.append(f"{tut_display} : {tut.slot.day}, {tut.slot.time}")
+    
     return "\n".join(lines)
+
 
 
 class AndTreeSearch:
 
     def __init__(self, input_data: InputData) -> None:
+        '''
+        Initializes the search:
+        - loads all available slots
+        - loads all lectures/tutorials
+        - applies partial assignments
+        - sets up bounding score, best answer, and slot usage states
+        '''
         self._input_data = input_data
 
+        # Dictionaries mapping slot identifier to slot
         self._open_lecture_slots = {item.identifier: item for item in self._input_data.lec_slots}   # all possible lec slots
         self._open_tut_slots = {item.identifier: item for item in self._input_data.tut_slots}       # all possible tut slots
 
-        self._successors: Dict[str, LecTut] = {}            # _successors: used for expanding lec/tut in a sequence
+        self._successors: Dict[str, LecTut] = {}            # used for expanding lec/tut in a sequence
+        self._curr_schedule: Dict[str, ScheduledItem] = {}  # current partial schedule
+        self._curr_bounding_score = 0                       # penalty so far
+        self._min_eval = float('inf')                       # best full schedule's score found so far
+        self._results = []                                  # all full schedules found
+        self.num_leafs = 0                                  # for observability
+        self.ans: Optional[Dict[str, ScheduledItem]] = None # best schedule found
 
-        self._curr_schedule: Dict[str, ScheduledItem] = {}  # _curr_schedule: mapping from lec/tut ID to ScheduledItem
-
-        self._curr_bounding_score = 0                       # _curr_bounding_score: penalty so far
-
-        self._min_eval = float('inf')                       # _min_eval: best full schedule's score found so far
-
-        self._results = []                                  # _results: all full schedules found
-
-        self.num_leafs = 0 # for observability
-
-        self.ans: Optional[Dict[str, ScheduledItem]] = None # ans: best schedule found
-
-        self._init_schedule()
+        self._init_schedule()                               # apply partial assignments and set up priorities
         print(input_data.not_compatible)
+
 
     # Calculates bounding score based on penalties, for pruning
     def _calc_bounding_score_contrib(self, next_lt: LecTut, next_slot: LecTutSlot) -> float:
+        
         # Preference penalty
         pref_pen = 0
-        
         if (ident := next_lt.identifier) in self._input_data.preferences and (self._input_data.preferences[ident].day != next_slot.day or self._input_data.preferences[ident].start_time != next_slot.start_time):
             pref_pen = self._input_data.preferences[ident].pref_val
     
-        # Pair penality
+        # Pair penality: items that must be scheduled together
         pair_pen = 0
         if (ident := next_lt.identifier) in self._input_data.pair and (pair_id := self._input_data.pair[ident]) in self._curr_schedule and (self._curr_schedule[pair_id].slot.day != next_slot.day or self._curr_schedule[pair_id].slot.start_time != next_slot.start_time):
             pair_pen = self._input_data.pen_not_paired
         
-        # Section penalty
+        # Section penalty: two lectures of same course at same slot
         section_pen = 0
         if not is_lec(next_lt):
             return pref_pen + pair_pen
@@ -124,19 +139,21 @@ class AndTreeSearch:
             if next_lt.lecture_id == item.lt.lecture_id and next_slot.day == item.slot.day and next_slot.start_time == item.slot.start_time:
                 section_pen = self._input_data.pen_section
 
-        b_score = pref_pen + pair_pen + section_pen
+        b_score = pref_pen + pair_pen + section_pen # final calculated score
         return b_score
     
-
+    # Computes total estimated score = current penalty + min future penalty
     def _get_eval_score(self):
-        """This can most likley be optimized"""
+        """This can most likely be optimized"""
 
         tut_min_pen = 0
         lec_min_pen = 0
 
+        # Penalties for lecture slots that would stay under min capacity
         for slot in self._open_lecture_slots.values():
             lec_min_pen += max(slot.min_cap - slot.current_cap, 0) * self._input_data.pen_lec_min
 
+        # Penalties for tutorial slots that would stay under min capacity
         for slot in self._open_tut_slots.values():
             tut_min_pen += max(slot.min_cap - slot.current_cap, 0) * self._input_data.pen_tut_min
 
@@ -147,7 +164,7 @@ class AndTreeSearch:
     # If any rule is violated: return True (fail)
     def _fail_hc(self, curr_sched: Dict[str, ScheduledItem], next_lt: LecTut, next_slot: LecTutSlot) -> bool:
 
-        # Handle cap limit
+        # Handle capacity limit
         if next_slot.current_cap >= next_slot.max_cap:
             return True
 
@@ -190,11 +207,11 @@ class AndTreeSearch:
         return False
     
 
-    # Determines which lecture/tutorial to assign next, using a heuristic.
-    # Determines which slot options are valid (capacity, compatibility, unwanted times, etc.)
-    # Returns a list of ScheduledItem objects that correspond to valid options.
     def _get_expansions(self, leaf: Node) -> List[ScheduledItem]:
         """
+        Determines which lecture/tutorial to assign next, using a heuristic.
+        Returns a list of ScheduledItem objects that correspond to valid options.
+        
         Expansion ordering heuristic:
 
         If most recent assignment is a lecture:
@@ -212,42 +229,62 @@ class AndTreeSearch:
 
         chosen_lectut = None
 
+        # If we have decided the next item for this one, use it
         if (ident := leaf.most_recent_item.lt.identifier) in self._successors:
             chosen_lectut = self._successors[ident]
+
+        # If it's a lecture, schedule its tutorials next
         elif is_lec((lec := leaf.most_recent_item.lt)):
             for t_id, tut in self._all_tutorials.items():
                 if tut.parent_lecture_id == lec.identifier:
                     chosen_lectut = self._all_tutorials.pop(t_id)
                     break
+
+        # If it's a tutorial, schedule the next tutorial for the same lecture
         elif is_tut((most_recent_tut := leaf.most_recent_item.lt)):
             for t_id, tut in self._all_tutorials.items():
                 if tut.parent_lecture_id == most_recent_tut.parent_lecture_id:
                     chosen_lectut = self._all_tutorials.pop(t_id)
                     break
 
+        # Otherwise, use priority buckets
         if not chosen_lectut:
             for lt_bucket in (self._evening_lectures, self._5XX_lectures, self._other_lectures, self._all_tutorials):
                 if lt_bucket:
                     _, chosen_lectut = lt_bucket.popitem(last=False)
                     break
             else:
-                return []
+                return [] # If there are no remaining items, no expansions
 
+
+        # Store chosen successor for the item
         self._successors[leaf.most_recent_item.lt.identifier] = chosen_lectut
 
+        # Pick slots
         open_slots = self._open_lecture_slots if is_lec(chosen_lectut) else self._open_tut_slots
         
+
         expansions = []
         for _, os in open_slots.items():
+
+            # Evening lectures use evening slots
             if chosen_lectut.is_evening and os.start_time < EVENING_TIME:
                 continue
+
+            # Hard constraints check
             if self._fail_hc(self._curr_schedule, chosen_lectut, os):
                 continue
+
+            # Penalty for this placement
             next_b_score = self._calc_bounding_score_contrib(chosen_lectut, os)
+            
+            # Pruning: if it exceeds best score, skip
             if next_b_score + self._curr_bounding_score > self._min_eval:
                 continue
+
             expansions.append(ScheduledItem(chosen_lectut, os, os.current_cap, next_b_score))
         return expansions
+
 
     def _init_schedule(self):
         # remove Tuesday @ 11-12:30 from slots
