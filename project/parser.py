@@ -10,7 +10,10 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class InputData:
+class InputData: 
+    '''
+    Holds all data needed by the solver.
+    '''
     name: str
     lec_slots: List[LectureSlot]
     tut_slots: List[TutorialSlot]
@@ -26,8 +29,11 @@ class InputData:
     pen_not_paired: int
     pen_section: int
 
+
+
 @dataclass
 class ParsedFile:
+    '''Used in _parse_file() before converting lists to dictionaries and applying multipliers.'''
     name: str = ""
     lec_slots: List[LectureSlot] = field(default_factory=list)
     tut_slots: List[TutorialSlot] = field(default_factory=list)
@@ -39,8 +45,7 @@ class ParsedFile:
     pair: List[Pair] = field(default_factory=list)
     part_assign: List[PartialAssignment] = field(default_factory=list)
 
-
-headers = {
+headers = {     # for use in _parse_file()
     "Lecture slots:": ("lec_slots", LectureSlot),
     "Tutorial slots:": ("tut_slots", TutorialSlot),
     "Lectures:": ("lectures", Lecture),
@@ -53,6 +58,8 @@ headers = {
 }
 
 def _parse_file(path: str | Path):
+    ''' Reads inout file, identifies headers, parses each line.'''
+    
     parsed = ParsedFile()
 
     with open(path) as f:
@@ -65,20 +72,18 @@ def _parse_file(path: str | Path):
                 continue
             logger.info(line)
 
-            if line in headers:
+            if line in headers:                                     # if the line is one of the headers
                 header_name = line
-
-                current_attr, current_cls = headers[header_name]
+                current_attr, current_cls = headers[header_name]    # determine the attribute/class
                 continue
             
             assert current_cls
             assert current_attr
-            entry = current_cls.from_csv(line)
-            getattr(parsed, current_attr).append(entry)
+            entry = current_cls.from_csv(line)          # convert CSV to class
+            getattr(parsed, current_attr).append(entry) # append parsed object to list
 
     return parsed
             
-
 
 
 def get_input_data(path: str | Path, w_min_filled: str, w_pref: str, w_pair: str, w_sec_diff: str, pen_lec_min: str, pen_tut_min: str, pen_not_paired: str, pen_section: str) -> InputData:
@@ -86,7 +91,7 @@ def get_input_data(path: str | Path, w_min_filled: str, w_pref: str, w_pair: str
     parsed_file = _parse_file(path)
 
     id_map: Dict[str, LecTut] = {}
-    # for lec in parsed_file.lectures:
+    # for lec in parsed_file.lectures: # ?
     #     id_map[lec.identifier] = lec
     #     print(lec.identifier, lec)
     # for tut in parsed_file.tutorials:
@@ -101,29 +106,29 @@ def get_input_data(path: str | Path, w_min_filled: str, w_pref: str, w_pair: str
     for lt in parsed_file.lectures:
         print(lt)
 
-
-
+    # Build pair dictionary
     pair: Dict[str, str] = {}
     for pr in parsed_file.pair:
         pair[pr.id1] = pr.id2
         pair[pr.id2] = pr.id1
 
+    # Build unwanted constraints dictionary
     unwanted: Dict[str, List[Unwanted]] = defaultdict(list)
-
     for uw in parsed_file.unwanted:
         unwanted[uw.identifier].append(uw)
 
+    # Convert preference list to dict and apply multipliers
     preferences: Dict[str, Preference] = {}
-
     for pref in parsed_file.preferences:
-        pref.pref_val *= int(w_pref)
+        pref.pref_val *= int(w_pref)            # apply multiplier
         preferences[pref.identifier] = pref
 
+    # Build partial assignments dictionary
     part_assign: Dict[str, PartialAssignment] = {}
-
     for pa in parsed_file.part_assign:
         part_assign[pa.identifier] = pa
 
+    # Return final InputData object with penalties/preferences
     return InputData(
         name=parsed_file.name,
         lec_slots=parsed_file.lec_slots,
