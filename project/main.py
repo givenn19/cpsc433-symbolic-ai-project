@@ -1,3 +1,10 @@
+'''
+CPSC 433 Project: Group 18
+Nish
+Kian Sieppert L01 T01 301344666
+
+'''
+
 import sys
 from time import perf_counter
 from project.parser import get_input_data

@@ -1,3 +1,10 @@
+'''
+CPSC 433 Project: Group 18
+Nish
+Kian Sieppert L01 T01 301344666
+
+'''
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import TypeGuard, Union

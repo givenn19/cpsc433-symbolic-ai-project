@@ -1,3 +1,10 @@
+'''
+CPSC 433 Project: Group 18
+Nish
+Kian Sieppert L01 T01 301344666
+
+'''
+
 from dataclasses import dataclass
 from typing import NamedTuple, get_type_hints, Type, TypeVar
 
