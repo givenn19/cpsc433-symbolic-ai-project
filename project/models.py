@@ -3,6 +3,13 @@ from dataclasses import dataclass, field
 from typing import TypeGuard, Union
 from project.csv_parsable import CSVParsable
 
+'''
+models.py:
+
+Defines dataclasses for lectures, tutorials, time slots and constraints.
+These are used throughout the and-tree search algorithm to construct schedules.
+
+'''
 
 def _calc_start_end_times(time_str: str, day: str, identifier: str):
     '''

@@ -4,6 +4,18 @@ from project.parser import get_input_data
 from project.and_tree import AndTreeSearch
 import tracemalloc
 
+'''
+main.py:
+
+Loads all input CSV data via the parser.
+Runs the and-tree search algorithm.
+Measures runtim/memory usage.
+Displays final selected schedule.
+
+Run this file to get a schedule.
+
+'''
+
 def main():
 
     # Read command-line args and parse into InputData object (parser.py)

@@ -5,7 +5,13 @@ from typing import Dict, List, Mapping, Optional, Sequence, Union
 from project.models import LecTut, Lecture, LectureSlot, NotCompatible, TutorialSlot, LecTutSlot, is_tut, is_lec
 from project.parser import InputData
 
+'''
+and_tree.py:
 
+Implements and-tree search algorithm that's used to find valid schedules.
+AndTreeSearch recursively builds combinations of lec/tut assignments with respect to constraints.
+
+'''
 
 @dataclass(frozen=True, slots=True)
 class ScheduledItem:                # ScheduledItem: represents one actual assignment

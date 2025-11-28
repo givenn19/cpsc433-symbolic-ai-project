@@ -3,11 +3,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, NamedTuple
 import logging
-
 from project.models import LectureSlot, TutorialSlot, Tutorial, Lecture, NotCompatible, Unwanted, Preference, Pair, PartialAssignment, LecTut
 
-logger = logging.getLogger(__name__)
+'''
+parser.py:
 
+Responsible for loading/validating all input CSV files and parsing them into usable data.
+Includes get_input_data() function, which returns a usable InputData object to be used by the and-tree search algorithm.
+
+'''
+
+logger = logging.getLogger(__name__)
 
 @dataclass
 class InputData: 

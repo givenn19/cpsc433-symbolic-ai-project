@@ -1,9 +1,15 @@
 from dataclasses import dataclass
 from typing import NamedTuple, get_type_hints, Type, TypeVar
 
+'''
+csv_parsable.py:
+
+Includes CSVParsable class which is used to construct dataclasses from a csv file.
+
+'''
+
 
 T = TypeVar("T", bound="CSVParsable") # Generic type var that inherits CSVParsable
-
 
 class CSVParsable:
 
